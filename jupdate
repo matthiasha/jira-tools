@@ -39,11 +39,12 @@ for _, row in df.iterrows():
 
     issue = jira.issue(row["key"])
     jira_name = jira_names[args.column]
+    previous_value = getattr(issue.fields, jira_name)
 
-    if getattr(issue.fields, jira_name) == row[args.column]:
+    if previous_value == row[args.column]:
         continue
 
-    print(row["key"], row[args.column])
+    print(row["key"], issue.fields.summary, previous_value, "=>", row[args.column])
 
     if issue.fields.status.name == 'Closed':
         jira.transition_issue(issue, 'Reopen Issue')
