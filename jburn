@@ -1,0 +1,80 @@
+#!/Users/mzhafn/.pyenv/versions/venv/bin/python
+
+import os
+import argparse
+import pandas
+import plotly.express as px
+from jira import JIRA
+from jira.resources import AgileResource
+
+TOKEN = os.environ["JIRA_API_TOKEN"]
+jira = JIRA(
+    "https://jira.dolby.net/jira",
+    options={
+        "agile_rest_path": AgileResource.AGILE_BASE_REST_PATH,
+        "headers": {
+            "Authorization": f"Bearer {TOKEN}",
+            **JIRA.DEFAULT_OPTIONS["headers"],
+        },
+    },
+)
+
+parser = argparse.ArgumentParser(
+    description="Jira Burndown",
+    formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+)
+parser.add_argument(
+    "html_output",
+    # default=jira.filter(DEFAULT_FILTER_ID).jql,
+    nargs="?",
+    help="Jira query string",
+)
+parser.add_argument(
+    "jql",
+    # default=jira.filter(DEFAULT_FILTER_ID).jql,
+    nargs="?",
+    help="Jira query string",
+)
+args = parser.parse_args()
+
+
+def get_burndown_updates(jql):
+    for issue in jira.search_issues(jql, expand="changelog"):
+        issue_data = {"key": issue.key, "summary": issue.fields.summary}
+
+        estimate = getattr(issue.fields, "customfield_10262")
+        if estimate is None:
+            estimate = float("nan")
+
+        yield {
+            "new_status": "Created",
+            "date": issue.fields.created,
+            "points": estimate,
+            **issue_data,
+        }
+
+        for history in issue.changelog.histories:
+            for item in history.items:
+                if item.field == "status":
+                    change_data = {
+                        "new_status": item.toString,
+                        "date": history.created,
+                        **issue_data,
+                    }
+                    if item.toString == "Closed":
+                        yield {"points": -estimate, **change_data}
+                    elif item.toString == "Reopened":
+                        yield {"points": estimate, **change_data}
+                    else:
+                        yield change_data
+
+
+df = pandas.DataFrame(list(get_burndown_updates(args.jql)))
+df["date"] = pandas.to_datetime(df["date"], utc=True)
+df = df.sort_values(by="date")
+df["points"].fillna(0, inplace=True)
+df["burndown"] = df["points"].cumsum()
+
+px.line(
+    df, x="date", y="burndown", hover_data=["key", "summary", "new_status", "points"]
+).write_html(args.html_output)

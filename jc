@@ -1,0 +1,111 @@
+#!/Users/mzhafn/.pyenv/versions/venv/bin/python
+import os
+import getpass
+import pandas as pd
+from jira import JIRA
+from jira.resources import AgileResource
+import argparse
+
+BOARD_ID = 1030
+TOKEN = os.environ["JIRA_API_TOKEN"]
+
+parser = argparse.ArgumentParser(
+    description="Create a new issue",
+    formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+)
+parser.add_argument("project")
+parser.add_argument("summary")
+parser.add_argument(
+    "--estimate",
+    "-e",
+    type=float,
+    default=None,
+    help="set story point estimate",
+)
+parser.add_argument(
+    "--type", "-t", default="Task", help="set issue type, e.g. Bug, Task, Story"
+)
+parser.add_argument("--assignee", "-a", help="set assignee", default=None)
+parser.add_argument(
+    "--sprint",
+    "-s",
+    default=None,
+    help=f"Add ticket to sprint of board {BOARD_ID}. A substring that matches a single sprint is sufficient.",
+)
+parser.add_argument(
+    "--version",
+    "-v",
+    default=None,
+    help="set fixVersions to given value. Matches existing versions via substring search.",
+)
+parser.add_argument(
+    "--label",
+    "-l",
+    default=[],
+    action="append",
+    help="Set label. Flag can be used multiple times.",
+)
+parser.add_argument(
+    "--component", "-c", default=[], action="append", help="Set component"
+)
+parser.add_argument(
+    "--epic",
+    "-p",
+    default=None,
+    help="link to given epic",
+)
+args = parser.parse_args()
+
+jira = JIRA(
+    "https://jira.dolby.net/jira",
+    options={
+        "agile_rest_path": AgileResource.AGILE_BASE_REST_PATH,
+        "headers": {
+            "Authorization": f"Bearer {TOKEN}",
+            **JIRA.DEFAULT_OPTIONS["headers"],
+        },
+    },
+)
+pd.set_option("display.width", None)
+pd.set_option("display.max_colwidth", None)
+
+kw = {}
+
+if args.sprint is not None:
+    sprints = jira.sprints(BOARD_ID, state="future,active")
+    filter_sprints = [s for s in sprints if args.sprint.lower() in s.name.lower()]
+    if len(filter_sprints) != 1:
+        print(f"unclear sprint {args.sprint}")
+        print(pd.DataFrame(sprints))
+        assert False
+
+if args.version is not None:
+    versions = jira.project_versions(args.project)
+    filter_versions = [v for v in versions if args.version.lower() in v.name.lower()]
+    if len(filter_versions) != 1:
+        print(f"unclear version {args.version}")
+        print(pd.DataFrame(versions))
+        assert False
+    else:
+        kw["fixVersions"] = [{"id": filter_versions[0].id}]
+
+if args.estimate is not None:
+    kw["customfield_10262"] = args.estimate
+if args.assignee is not None:
+    kw["assignee"] = {"name": args.assignee}
+if args.project is not None:
+    kw["project"] = args.project
+if args.type is not None:
+    kw["issuetype"] = {"name": args.type}
+if len(args.label):
+    kw["labels"] = args.label
+if len(args.component):
+    kw["components"] = [{"name": c} for c in args.component]
+if args.epic is not None:
+    kw["customfield_10921"] = args.epic
+
+i = jira.create_issue(summary=args.summary, **kw)
+print(f"https://jira.dolby.net/jira/browse/{i.key}")
+
+if args.sprint is not None:
+    jira.add_issues_to_sprint(filter_sprints[0].id, [i.key])

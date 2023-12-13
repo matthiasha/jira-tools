@@ -1,0 +1,59 @@
+#!/Users/mzhafn/.pyenv/versions/venv/bin/python
+import os
+import pandas
+from jira import JIRA
+from jira.resources import AgileResource
+import argparse
+
+TOKEN = os.environ["JIRA_API_TOKEN"]
+
+parser = argparse.ArgumentParser(
+    description="Update from CSV",
+    formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+)
+parser.add_argument("csv")
+parser.add_argument("column")
+args = parser.parse_args()
+
+jira_names = {"estimate": "customfield_10262",
+              "epic": "customfield_10921"}
+
+jira = JIRA(
+    "https://jira.dolby.net/jira",
+    options={
+        "agile_rest_path": AgileResource.AGILE_BASE_REST_PATH,
+        "headers": {
+            "Authorization": f"Bearer {TOKEN}",
+            **JIRA.DEFAULT_OPTIONS["headers"],
+        },
+    },
+)
+pandas.set_option("display.width", None)
+pandas.set_option("display.max_colwidth", None)
+
+df = pandas.read_csv(args.csv)
+
+for _, row in df.iterrows():
+    if pandas.isnull(row[args.column]):
+        continue
+
+    issue = jira.issue(row["key"])
+    jira_name = jira_names[args.column]
+
+    if getattr(issue.fields, jira_name) == row[args.column]:
+        continue
+
+    print(row["key"], row[args.column])
+
+    if issue.fields.status.name == 'Closed':
+        jira.transition_issue(issue, 'Reopen Issue')
+        close = True
+    else:
+        close = False
+
+    issue.update(fields={jira_name: row[args.column]})
+
+    if close:
+        jira.transition_issue(issue, 'Close Issue')
+
+

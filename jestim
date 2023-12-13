@@ -1,0 +1,80 @@
+#!/Users/mzhafn/.pyenv/versions/venv/bin/python
+
+import sys
+import os
+import pandas as pd
+from jira import JIRA
+from jira.resources import AgileResource
+import argparse
+
+DEFAULT_FILTER_ID = 15828
+TOKEN = os.environ["JIRA_API_TOKEN"]
+
+jira = JIRA(
+    "https://jira.dolby.net/jira",
+    options={
+        "agile_rest_path": AgileResource.AGILE_BASE_REST_PATH,
+        "headers": {
+            "Authorization": f"Bearer {TOKEN}",
+            **JIRA.DEFAULT_OPTIONS["headers"],
+        },
+    },
+)
+pd.set_option("display.width", None)
+pd.set_option("display.max_colwidth", None)
+
+parser = argparse.ArgumentParser(
+    description="Jira issues estimate",
+    formatter_class=argparse.ArgumentDefaultsHelpFormatter,
+)
+parser.add_argument(
+    "jql",
+    # default=jira.filter(DEFAULT_FILTER_ID).jql,
+    nargs="?",
+    help="Jira query string",
+)
+parser.add_argument("--csv", action="store_true", help="CSV output on stdout")
+parser.add_argument(
+    "--cols", help="which columns to output", default="key,summary,status,estimate"
+)
+args = parser.parse_args()
+cols = set(args.cols.split(","))
+
+
+def get_field(issue, name):
+    # print('\n'.join(f'{f["id"]}: {f["name"]}' for f in jira.fields()))
+    if name == "key":
+        return issue.key
+    elif name == "estimate":
+        return getattr(issue.fields, "customfield_10262", None)
+    else:
+        return getattr(issue.fields, name)
+
+
+df = pd.DataFrame(
+    [{k: get_field(x, k) for k in cols} for x in jira.search_issues(args.jql)]
+)
+
+if len(df) == 0:
+    print("no results for query")
+    sys.exit(1)
+
+if "key" in cols:
+    df = df.set_index("key")
+
+if args.csv:
+    print(df.to_csv())
+else:
+    print(df)
+
+if "estimate" in df.columns:
+    print(f"\nSum of estimate: {sum(df.fillna(0).estimate)}")
+
+"""
+* issue created -> +estimate 
+* issue closed -> -estimate
+* reopened -> +estimate
+* others -> 0
+* columns key, summary, date, new_status, points
+* plot sum(points) vs. date
+"""
