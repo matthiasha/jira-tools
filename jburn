@@ -7,6 +7,8 @@ import plotly.express as px
 from jira import JIRA
 from jira.resources import AgileResource
 
+pandas.set_option('display.max_rows', None)
+
 TOKEN = os.environ["JIRA_API_TOKEN"]
 jira = JIRA(
     "https://jira.dolby.net/jira",
@@ -78,3 +80,7 @@ df["burndown"] = df["points"].cumsum()
 px.line(
     df, x="date", y="burndown", hover_data=["key", "summary", "new_status", "points"]
 ).write_html(args.html_output)
+
+df["date"] = df["date"].dt.date
+df = df[["key", "summary", "new_status", "burndown"]]
+print(df)
