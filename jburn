@@ -79,7 +79,7 @@ df["burndown"] = df["points"].cumsum()
 
 px.line(
     df, x="date", y="burndown", hover_data=["key", "summary", "new_status", "points"]
-).write_html(args.html_output)
+).write_html(args.html_output, include_plotlyjs="cdn")
 
 df["date"] = df["date"].dt.date
 df = df[["key", "summary", "new_status", "burndown"]]
