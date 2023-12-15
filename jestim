@@ -1,27 +1,11 @@
 #!/Users/mzhafn/.pyenv/versions/venv/bin/python
 
 import sys
-import os
-import pandas as pd
-from jira import JIRA
-from jira.resources import AgileResource
 import argparse
+import pandas as pd
+from common import jira
 
 DEFAULT_FILTER_ID = 15828
-TOKEN = os.environ["JIRA_API_TOKEN"]
-
-jira = JIRA(
-    "https://jira.dolby.net/jira",
-    options={
-        "agile_rest_path": AgileResource.AGILE_BASE_REST_PATH,
-        "headers": {
-            "Authorization": f"Bearer {TOKEN}",
-            **JIRA.DEFAULT_OPTIONS["headers"],
-        },
-    },
-)
-pd.set_option("display.width", None)
-pd.set_option("display.max_colwidth", None)
 
 parser = argparse.ArgumentParser(
     description="Jira issues estimate",
