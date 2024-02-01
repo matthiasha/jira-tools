@@ -102,6 +102,7 @@ if len(args.label):
 if len(args.component):
     kw["components"] = [{"name": c} for c in args.component]
 if args.epic is not None:
+    print(f"adding to epic: {jira.issue(args.epic).fields.summary}")
     kw["customfield_10921"] = args.epic
 
 i = jira.create_issue(summary=args.summary, **kw)
