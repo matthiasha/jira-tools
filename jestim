@@ -52,7 +52,7 @@ else:
     print(df)
 
 if "estimate" in df.columns:
-    print(f"\nSum of estimate: {sum(df.fillna(0).estimate)}")
+    print(f"\nSum of estimate: {sum(df.estimate.astype(float).fillna(0))}")
 
 """
 * issue created -> +estimate 
